@@ -47,7 +47,7 @@ python3 lvx2_to_rosbag.py --in_file ./Indoor_sampledata.lvx2 --out_file ./Indoor
 - 支持多设备数据解析
 - 支持外参变换
 - 修复点云强度（intensity）写入
-- 优化点云发布频率
+- 优化点云帧率
 - 支持实时转换进度、速度、预估剩余时间显示
 - 采用流式处理和内存映射，优化大文件转换性能
 
