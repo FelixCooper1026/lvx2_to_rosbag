@@ -30,9 +30,9 @@ pip install -r requirements.txt
    - 室外场景数据：[Outdoor_sampledata.lvx2](https://terra-1-g.djicdn.com/65c028cd298f4669a7f0e40e50ba1131/Mid360/Outdoor_sampledata.lvx2)
 
 2. 将示例数据放在与 Python 脚本（lvx2_to_rosbag.py）相同的文件夹中
-3. 运行脚本（使用简化命令格式）：
+3. 运行命令（完整命令）：
 ```bash
-python3 lvx2_to_rosbag.py input.lvx2 [output.bag] [/livox/lidar] [livox_frame]
+python3 lvx2_to_rosbag.py input.lvx2 output.bag /livox/lidar livox_frame
 ```
 
 ### 参数说明
