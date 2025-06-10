@@ -15,82 +15,9 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointField, PointCloud2
 from math import cos, sin, radians
 from tqdm import tqdm
-import subprocess
-import signal
-import sys
 
 # 导入自定义的 LVX2 解析器
 from lvx2_parser import LVX2_PARSER, Frame, Package
-
-# 全局变量，用于存储 roscore 进程
-roscore_process = None
-
-def start_roscore():
-    """启动 ROS Master (roscore)"""
-    global roscore_process
-    try:
-        # 检查 roscore 是否已经在运行
-        rospy.wait_for_service('/rosout', timeout=1)
-        print("ROS Master 已经在运行")
-        return True
-    except rospy.ROSException:
-        print("正在启动 ROS Master...")
-        try:
-            # 获取 ROS 环境变量
-            ros_env = os.environ.copy()
-            if 'ROS_ROOT' not in ros_env:
-                # 尝试设置 ROS 环境变量
-                ros_setup = '/opt/ros/noetic/setup.bash'  # ROS Noetic 的默认路径
-                if os.path.exists(ros_setup):
-                    # 使用 bash 来加载 ROS 环境
-                    cmd = f"source {ros_setup} && roscore"
-                    roscore_process = subprocess.Popen(cmd, shell=True, executable='/bin/bash', 
-                                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                                     env=ros_env)
-                else:
-                    print("错误: 找不到 ROS 环境设置文件")
-                    print("请确保已正确安装 ROS Noetic，并设置环境变量")
-                    return False
-            else:
-                # 如果已经设置了 ROS 环境变量，直接启动 roscore
-                roscore_process = subprocess.Popen(['roscore'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                                 env=ros_env)
-
-            # 等待 roscore 启动
-            try:
-                rospy.wait_for_service('/rosout', timeout=10)
-                print("ROS Master 启动成功")
-                return True
-            except rospy.ROSException:
-                if roscore_process:
-                    # 获取错误输出
-                    _, stderr = roscore_process.communicate()
-                    error_msg = stderr.decode('utf-8')
-                    print(f"错误: ROS Master 启动失败")
-                    print(f"错误信息: {error_msg}")
-                    print("\n可能的解决方案:")
-                    print("1. 确保已安装 ROS Noetic")
-                    print("2. 运行以下命令设置 ROS 环境:")
-                    print("   source /opt/ros/noetic/setup.bash")
-                    print("3. 然后重新运行此程序")
-                return False
-        except Exception as e:
-            print(f"错误: 启动 ROS Master 时发生异常: {str(e)}")
-            return False
-
-def cleanup():
-    """清理函数，用于在程序退出时关闭 roscore"""
-    global roscore_process
-    if roscore_process:
-        print("\n正在关闭 ROS Master...")
-        roscore_process.terminate()
-        roscore_process.wait()
-        print("ROS Master 已关闭")
-
-# 注册信号处理函数
-def signal_handler(sig, frame):
-    cleanup()
-    sys.exit(0)
 
 # 将欧拉角 (度) 转换为旋转矩阵
 def euler_to_rotation_matrix(roll, pitch, yaw):
@@ -116,7 +43,6 @@ def euler_to_rotation_matrix(roll, pitch, yaw):
     R = np.dot(R_z, np.dot(R_y, R_x))
 
     return R
-
 
 # LVX2 到 ROS bag 转换器类
 class LVX2_to_ROSBAG(object):
