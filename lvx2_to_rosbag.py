@@ -15,10 +15,82 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointField, PointCloud2
 from math import cos, sin, radians
 from tqdm import tqdm
+import subprocess
+import signal
+import sys
 
 # 导入自定义的 LVX2 解析器
 from lvx2_parser import LVX2_PARSER, Frame, Package
 
+# 全局变量，用于存储 roscore 进程
+roscore_process = None
+
+def start_roscore():
+    """启动 ROS Master (roscore)"""
+    global roscore_process
+    try:
+        # 检查 roscore 是否已经在运行
+        rospy.wait_for_service('/rosout', timeout=1)
+        print("ROS Master 已经在运行")
+        return True
+    except rospy.ROSException:
+        print("正在启动 ROS Master...")
+        try:
+            # 获取 ROS 环境变量
+            ros_env = os.environ.copy()
+            if 'ROS_ROOT' not in ros_env:
+                # 尝试设置 ROS 环境变量
+                ros_setup = '/opt/ros/noetic/setup.bash'  # ROS Noetic 的默认路径
+                if os.path.exists(ros_setup):
+                    # 使用 bash 来加载 ROS 环境
+                    cmd = f"source {ros_setup} && roscore"
+                    roscore_process = subprocess.Popen(cmd, shell=True, executable='/bin/bash', 
+                                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                                     env=ros_env)
+                else:
+                    print("错误: 找不到 ROS 环境设置文件")
+                    print("请确保已正确安装 ROS Noetic，并设置环境变量")
+                    return False
+            else:
+                # 如果已经设置了 ROS 环境变量，直接启动 roscore
+                roscore_process = subprocess.Popen(['roscore'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                                 env=ros_env)
+
+            # 等待 roscore 启动
+            try:
+                rospy.wait_for_service('/rosout', timeout=10)
+                print("ROS Master 启动成功")
+                return True
+            except rospy.ROSException:
+                if roscore_process:
+                    # 获取错误输出
+                    _, stderr = roscore_process.communicate()
+                    error_msg = stderr.decode('utf-8')
+                    print(f"错误: ROS Master 启动失败")
+                    print(f"错误信息: {error_msg}")
+                    print("\n可能的解决方案:")
+                    print("1. 确保已安装 ROS Noetic")
+                    print("2. 运行以下命令设置 ROS 环境:")
+                    print("   source /opt/ros/noetic/setup.bash")
+                    print("3. 然后重新运行此程序")
+                return False
+        except Exception as e:
+            print(f"错误: 启动 ROS Master 时发生异常: {str(e)}")
+            return False
+
+def cleanup():
+    """清理函数，用于在程序退出时关闭 roscore"""
+    global roscore_process
+    if roscore_process:
+        print("\n正在关闭 ROS Master...")
+        roscore_process.terminate()
+        roscore_process.wait()
+        print("ROS Master 已关闭")
+
+# 注册信号处理函数
+def signal_handler(sig, frame):
+    cleanup()
+    sys.exit(0)
 
 # 将欧拉角 (度) 转换为旋转矩阵
 def euler_to_rotation_matrix(roll, pitch, yaw):
@@ -212,37 +284,62 @@ class LVX2_to_ROSBAG(object):
         elapsed_time = time.time() - start_time
         print(f"\n转换完成，耗时 {elapsed_time:.2f} 秒")
 
-
 # 主函数
 def main(args=None):
     # 创建命令行参数解析器
     _parser = argparse.ArgumentParser(description="将 lvx2 文件转换为 ROS bag 文件 (适用于 ROS1)")
-    # 添加输入文件参数
-    _parser.add_argument('--in_file', type=str, help='输入的 lvx2 文件路径', required=True)
-    # 添加输出文件参数，默认输出到 input_file.bag
-    _parser.add_argument('--out_file', type=str, help='输出的 ROS bag 文件路径', default=None)
-    # 添加 PointCloud2 topic 参数，默认 /livox/lidar
-    _parser.add_argument('--pc2_topic', type=str, help='发布的 PointCloud2 topic 名称', default='/livox/lidar')
-    # 添加 PointCloud2 frame_id 参数，默认 livox_frame
-    _parser.add_argument('--pc2_frame_id', type=str, help='发布的 PointCloud2 frame ID', default='livox_frame')
-    # 解析命令行参数
-    _args = _parser.parse_args(args)
-
-    # 获取输入、输出文件路径和 ROS topic/frame_id
-    _input_file = _args.in_file
-    # 如果未指定输出文件，则根据输入文件名生成默认输出文件名
-    _output_file = _args.out_file if _args.out_file else os.path.splitext(_input_file)[0] + '.bag'
-    _pc2_topic = _args.pc2_topic
-    _pc2_frame_id = _args.pc2_frame_id
-
-    # 打印转换信息
-    print(f"正在将 {os.path.basename(_input_file)} 转换为 ROS bag 文件: {os.path.basename(_output_file)}")
-    print(f"PointCloud2 Topic: {_pc2_topic}")
-    print(f"PointCloud2 Frame ID: {_pc2_frame_id}")
-
-    # 创建并运行 LVX2 到 ROS bag 转换器
+    
+    # 添加位置参数
+    _parser.add_argument('in_file', type=str, help='输入的 lvx2 文件路径')
+    _parser.add_argument('out_file', type=str, nargs='?', help='输出的 ROS bag 文件路径 (可选，默认使用输入文件名，仅将扩展名改为 .bag)')
+    _parser.add_argument('pc2_topic', type=str, nargs='?', help='发布的 PointCloud2 topic 名称 (可选，默认：/livox/lidar)', default='/livox/lidar')
+    _parser.add_argument('pc2_frame_id', type=str, nargs='?', help='发布的 PointCloud2 frame ID (可选，默认：livox_frame)', default='livox_frame')
+    
     try:
+        # 解析命令行参数
+        _args = _parser.parse_args(args)
+
+        # 检查输入文件是否存在
+        if not os.path.exists(_args.in_file):
+            print(f"错误: 输入文件 '{_args.in_file}' 不存在")
+            return
+
+        # 检查输入文件扩展名
+        if not _args.in_file.lower().endswith('.lvx2'):
+            print(f"错误: 输入文件 '{_args.in_file}' 不是有效的 LVX2 文件")
+            print("提示: 输入文件必须以 .lvx2 结尾")
+            return
+
+        # 获取输入、输出文件路径和 ROS topic/frame_id
+        _input_file = _args.in_file
+        # 如果未指定输出文件，则根据输入文件名生成默认输出文件名
+        _output_file = _args.out_file if _args.out_file else os.path.splitext(_input_file)[0] + '.bag'
+        _pc2_topic = _args.pc2_topic
+        _pc2_frame_id = _args.pc2_frame_id
+
+        # 打印转换信息
+        print(f"正在将 {os.path.basename(_input_file)} 转换为 ROS bag 文件: {os.path.basename(_output_file)}")
+        print(f"PointCloud2 Topic: {_pc2_topic}")
+        print(f"PointCloud2 Frame ID: {_pc2_frame_id}")
+
+        # 创建并运行 LVX2 到 ROS bag 转换器
         converter = LVX2_to_ROSBAG(in_file=_input_file, out_file=_output_file, pc2_topic=_pc2_topic, pc2_frame_id=_pc2_frame_id)
+
+    except argparse.ArgumentError as e:
+        print(f"参数错误: {e}")
+        _parser.print_help()
+    except SystemExit as e:
+        if e.code == 2:  # 参数错误
+            print("\n错误: 缺少必需的输入文件参数")
+            print("\n使用示例:")
+            print("  基本用法:")
+            print("    python3 lvx2_to_rosbag.py input.lvx2")
+            print("  指定输出文件:")
+            print("    python3 lvx2_to_rosbag.py input.lvx2 output.bag")
+            print("  指定所有参数:")
+            print("    python3 lvx2_to_rosbag.py input.lvx2 output.bag /livox/lidar livox_frame")
+            print("\n使用 -h 或 --help 查看完整帮助信息")
+        return
     except Exception as e:
         print(f"转换过程中发生错误: {e}")
         import traceback
@@ -250,6 +347,4 @@ def main(args=None):
 
 # 脚本的入口点
 if __name__ == '__main__':
-    # 初始化 ROS 节点
-    rospy.init_node('lvx2_to_rosbag_converter', anonymous=True)
     main()

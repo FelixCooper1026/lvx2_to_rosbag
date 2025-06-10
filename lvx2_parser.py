@@ -119,50 +119,58 @@ class LVX2_PARSER(object):
 
     def _read_headers(self):
         # 读取公共头
-        print('==================== 公共头 ====================')
-        # 尝试解析公共头，读取 24 字节
-        self._pub_header = self.parse_public_header(self._mmap.read(24))
+        print('==================== Public Header ========================')
+        # 解析公共头，读取 24 字节
+        header_data = self._mmap.read(24)
+        self._pub_header = self.parse_public_header(header_data)
         if self._pub_header is None:
-            raise ValueError("无效的公共头")
+            raise ValueError("Invalid public header")
+        print(f'Signature: {self._pub_header.signature}')
+        print(f'Version: {self._pub_header.ver_a}.{self._pub_header.ver_b}.{self._pub_header.ver_c}.{self._pub_header.ver_d}')
+        print(f'Magic Code: 0x{self._pub_header.magic_code:08X}')
 
         # 读取私有头
-        print('==================== 私有头 ====================')
-        # 尝试解析私有头，读取 5 字节
-        self._prv_header = self.parse_private_header(self._mmap.read(5))
+        #print('==================== Private Header ======================')
+        # 解析私有头，读取 5 字节
+        prv_header_data = self._mmap.read(5)
+        self._prv_header = self.parse_private_header(prv_header_data)
         if self._prv_header is None:
-            raise ValueError("无效的私有头")
+            raise ValueError("Invalid private header")
+        #print(f'Duration: {self._prv_header.duration:.3f} seconds')
+        #print(f'Device Count: {self._prv_header.device_count}')
+        device_count = self._prv_header.device_count
 
         # 读取设备信息列表
-        print('==================== 设备信息 ====================')
+        print('==================== Device Information ===================')
         # 根据私有头中的设备数量循环读取
-        for i in range(self._prv_header.device_count):
-            print(f'设备 #{i}')
+        for i in range(device_count):
+            print(f'Device #{i}')
             # 尝试解析设备信息，每个设备信息块 63 字节
             dev = self.parse_device_information(self._mmap.read(63))
             if dev is None:
-                raise ValueError(f"设备 {i} 的设备信息无效")
+                raise ValueError(f"Invalid device information for device {i}")
             # 打印设备信息
             print(f'  LiDAR SN: {dev.lidar_sn}')
             # 只在 Hub SN 不为空且字符有效时打印
             if dev.hub_sn and not any(c < 32 or c > 126 for c in dev.hub_sn.encode()):
                 print(f'  Hub SN: {dev.hub_sn}')
             print(f'  LiDAR ID: {dev.lidar_id}')
-            print(f'  LiDAR 类型: {dev.lidar_type}')
-            print(f'  设备类型: {dev.device_type}')
-            print(f'  启用外参: {dev.enable_extrinsic}')
-            print(f'  外参 滚转角: {dev.offset_roll}')
-            print(f'  外参 俯仰角: {dev.offset_pitch}')
-            print(f'  外参 偏航角: {dev.offset_yaw}')
-            print(f'  外参 X 偏移: {dev.offset_x}')
-            print(f'  外参 Y 偏移: {dev.offset_y}')
-            print(f'  外参 Z 偏移: {dev.offset_z}')
+            print(f'  LiDAR Type: {dev.lidar_type}')
+            print(f'  Device Type: {dev.device_type}')
+            print(f'  Enable Extrinsic: {dev.enable_extrinsic}')
+            print(f'  Extrinsic Roll: {dev.offset_roll}')
+            print(f'  Extrinsic Pitch: {dev.offset_pitch}')
+            print(f'  Extrinsic Yaw: {dev.offset_yaw}')
+            print(f'  Extrinsic X: {dev.offset_x}')
+            print(f'  Extrinsic Y: {dev.offset_y}')
+            print(f'  Extrinsic Z: {dev.offset_z}')
             print('')
             # 将设备信息添加到列表中
             self._devices.append(dev)
 
     def stream_frames(self) -> Generator[Frame, None, None]:
         """以流式方式从文件读取帧，避免一次性加载全部数据。"""
-        print('==================== 点云数据 ====================')
+        #print('==================== Point Cloud Data ====================')
         # 循环读取文件直到结束
         while True:
             # 读取帧头数据 (24 字节)

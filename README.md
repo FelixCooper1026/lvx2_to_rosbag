@@ -30,17 +30,39 @@ pip install -r requirements.txt
    - 室外场景数据：[Outdoor_sampledata.lvx2](https://terra-1-g.djicdn.com/65c028cd298f4669a7f0e40e50ba1131/Mid360/Outdoor_sampledata.lvx2)
 
 2. 将示例数据放在与 Python 脚本（lvx2_to_rosbag.py）相同的文件夹中
-3. 运行脚本：
+3. 运行脚本（使用简化命令格式）：
 ```bash
-python3 lvx2_to_rosbag.py --in_file ./Indoor_sampledata.lvx2 --out_file ./Indoor_sampledata.bag --pc2_topic /livox/lidar --pc2_frame_id livox_frame
+python3 lvx2_to_rosbag.py input.lvx2 [output.bag] [/livox/lidar] [livox_frame]
 ```
 
 ### 参数说明
 
-- `in_file`: 要转换的 lvx2 文件
-- `out_file`: 输出的 bag 文件（可选，默认使用输入文件名，仅将扩展名改为 .bag）
-- `pc2_topic`: PointCloud2 话题名称（可选，默认：/livox/lidar）
-- `pc2_frame_id`: PointCloud2 数据的坐标系 ID（可选，默认：livox_frame）
+- `input.lvx2`: 要转换的 lvx2 文件（必需）
+- `output.bag`: 输出的 bag 文件（可选，默认使用输入文件名，仅将扩展名改为 .bag）
+- `/livox/lidar`: PointCloud2 话题名称（可选，默认：/livox/lidar）
+- `livox_frame`: PointCloud2 数据的坐标系 ID（可选，默认：livox_frame）
+
+### 使用示例
+
+1. 基本用法（只指定输入文件）：
+```bash
+python3 lvx2_to_rosbag.py input.lvx2
+```
+
+2. 指定输入和输出文件：
+```bash
+python3 lvx2_to_rosbag.py input.lvx2 output.bag
+```
+
+3. 指定所有参数：
+```bash
+python3 lvx2_to_rosbag.py input.lvx2 output.bag /livox/lidar livox_frame
+```
+
+4. 使用示例数据：
+```bash
+python3 lvx2_to_rosbag.py Indoor_sampledata.lvx2
+```
 
 ## 功能特点
 
